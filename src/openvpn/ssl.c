@@ -1334,7 +1334,7 @@ openvpn_PRF(const uint8_t *secret,
     return ret;
 }
 
-static void
+static bool
 init_key_contexts(struct key_state *ks,
                   struct tls_multi *multi,
                   const struct key_type *key_type,
@@ -1358,8 +1358,10 @@ init_key_contexts(struct key_state *ks,
                                   key_type->cipher, server);
         if (ret < 0)
         {
-            msg(M_FATAL, "Impossible to install key material in DCO: %s",
+            msg(M_WARN, "Impossible to install key material in DCO: %s",
                 strerror(-ret));
+
+            return false;
         }
 
         /* encrypt/decrypt context are unused with DCO */
@@ -1377,6 +1379,8 @@ init_key_contexts(struct key_state *ks,
                                    key2->keys[1 - (int)server].hmac,
                                    MAX_HMAC_KEY_LENGTH);
     }
+
+    return true;
 }
 
 static bool
@@ -1502,8 +1506,13 @@ generate_key_expansion(struct tls_multi *multi, struct key_state *ks,
         }
     }
 
-    init_key_contexts(ks, multi, &session->opt->key_type, server, &key2,
-                      session->opt->dco_enabled);
+    if (!init_key_contexts(ks, multi, &session->opt->key_type, server, &key2,
+                           session->opt->dco_enabled))
+    {
+        msg(D_TLS_ERRORS, "TLS Error: Could not initialize key contexts");
+        goto exit;
+    }
+
     ret = true;
 
 exit:
